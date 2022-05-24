@@ -72,7 +72,7 @@ func NewTLSCA(keyBits int, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) 
 }
 
 // LoadTLSCA create new tls CA
-func LoadTLSCA(keyPath, certPath string) (*TLSCA, error) {
+func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	keyBytes, kErr := ioutil.ReadFile(keyPath)
 	certBytes, cErr := ioutil.ReadFile(certPath)
 	if kErr != nil {
@@ -85,10 +85,39 @@ func LoadTLSCA(keyPath, certPath string) (*TLSCA, error) {
 	keyBlock, _ := pem.Decode(keyBytes)
 	if keyBlock == nil {
 		return nil, fmt.Errorf("decode key is nil")
-	} else if sort.SearchStrings(supportPemType, keyBlock.Type) < 0 {
+	} else if supportPemType[sort.SearchStrings(supportPemType, keyBlock.Type)] != keyBlock.Type {
 		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
 	}
-	key, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+
+	/* Fix x-ca/ca root/tls key Problem
+	 * https://github.com/x-ca/ca/blob/f82f6cc529662d5a751b79d87698a13c65f342ec/etc/root-ca.conf#L15
+	 * https://security.stackexchange.com/questions/93417/what-encryption-is-applied-on-a-key-generated-by-openssl-req
+	 * https://rfc-editor.org/rfc/rfc1423.html
+	 * openssl asn1parse -in root-ca.key -i | cut -c-90
+	 * - golang code
+	 *
+	 * if x509.IsEncryptedPEMBlock(keyBlock) == true {
+	 *    der, err := x509.DecryptPEMBlock(keyBlock, []byte("pwd"))
+	 *    key, _ = x509.ParsePKCS1PrivateKey(der)
+	 * } else {
+	 *    key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	 * }
+	 *
+	 * Raise error: `Error: fromPEMBytes: x509: no DEK-Info header in block`
+	 *
+	 * - fix run: `openssl rsa -in root-ca.key -des3`
+	 */
+	var key *rsa.PrivateKey
+	var err error
+	if x509.IsEncryptedPEMBlock(keyBlock) == true {
+		der, err := x509.DecryptPEMBlock(keyBlock, []byte(password))
+		if err != nil {
+			return nil, err
+		}
+		key, _ = x509.ParsePKCS1PrivateKey(der)
+	} else {
+		key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load private key %s, error %s", keyPath, err)
 	}
@@ -294,13 +323,13 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, ke
 func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Certificate, tlsChainPath string) error {
 	// mkdir
 	var dir = strings.Replace(commonName, "*.", "", -1)
-	err := os.MkdirAll(fmt.Sprintf("certs/%s", dir), 0700)
+	err := os.MkdirAll(fmt.Sprintf("x-ca/certs/%s", dir), 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
 
 	// write key
-	keyPath := fmt.Sprintf("certs/%s/%s.key", dir, commonName)
+	keyPath := fmt.Sprintf("x-ca/certs/%s/%s.key", dir, commonName)
 	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -316,7 +345,7 @@ func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Cer
 	}
 
 	// write cert
-	certPath := fmt.Sprintf("certs/%s/%s.crt", dir, commonName)
+	certPath := fmt.Sprintf("x-ca/certs/%s/%s.crt", dir, commonName)
 	certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -332,7 +361,7 @@ func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Cer
 	}
 
 	// write cert chain
-	certChainPath := fmt.Sprintf("certs/%s/%s.bundle.crt", dir, commonName)
+	certChainPath := fmt.Sprintf("x-ca/certs/%s/%s.bundle.crt", dir, commonName)
 	certChainFile, err := os.OpenFile(certChainPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -355,7 +384,7 @@ func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Cer
 	}
 
 	// print
-	fmt.Println("write cert to", fmt.Sprintf("./certs/%s/{%s.key,%s.crt,%s.bundle.crt}", commonName, commonName, commonName, commonName))
+	fmt.Println("write cert to", fmt.Sprintf("./x-ca/certs/%s/{%s.key,%s.crt,%s.bundle.crt}", commonName, commonName, commonName, commonName))
 
 	return nil
 }

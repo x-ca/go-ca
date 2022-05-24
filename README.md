@@ -1,6 +1,6 @@
 # go-ca
 
-golang x-ca client， which can simple Sign Self Root/Second-Level CA, and sign for Domains and IPs.
+golang x-ca client, which can simple Sign Self Root/Second-Level CA, and sign for Domains and IPs.
 
 shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
 
@@ -8,25 +8,28 @@ shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
 
 ```
 curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}
-chmox +x xca
+chmod +x xca
+mv xca /usr/local/bin/
 ```
 
 ## Help
 
 ```
-$ bin/xca --help
+$ xca --help
 Create Root CA and TLS CA:
-goca -create-ca true \
+xca -create-ca true \
   -root-cert x-ca/ca/root-ca.crt \
   -root-key x-ca/ca/root-ca/private/root-ca.key \
   -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key
+  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
+  -tls-chain x-ca/ca/tls-ca-chain.pem
 
 Sign Domains or Ips:
 xca -cn xxxx \
   --domains "xxx,xxx" --ips "xxx,xxx" \
   -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key
+  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
+  -tls-chain x-ca/ca/tls-ca-chain.pem
 
 Usage:
   -cn string
@@ -42,11 +45,18 @@ Usage:
   -root-cert string
     	Root certificate file path, PEM format. (default "x-ca/ca/root-ca.crt")
   -root-key string
-    	Root private key file path, PEM/? format. (default "x-ca/ca/root-ca/private/root-ca.key")
+    	Root private key file path, PEM format. (default "x-ca/ca/root-ca/private/root-ca.key")
   -tls-cert string
     	Second-Level certificate file path, PEM format. (default "x-ca/ca/tls-ca.crt")
+  -tls-chain string
+    	Root/Second-Level CA Chain file path, PEM format. (default "x-ca/ca/tls-ca-chain.pem")
   -tls-key string
-    	Second-Level private key file path, PEM/? format. (default "x-ca/ca/tls-ca/private/tls-ca.key")
+    	Second-Level private key file path, PEM format. (default "x-ca/ca/tls-ca/private/tls-ca.key")
+  -tls-key-password string
+    	tls key password, only work for load github.com/x-ca/x-ca.
+
+Source Code:
+  https://github.com/x-ca/go-ca
 ```
 
 ## Usage Demo
@@ -54,7 +64,7 @@ Usage:
 - create ca
 
 ```
-bin/xca -create-ca true \
+xca -create-ca true \
   -root-cert x-ca/ca/root-ca.crt \
   -root-key x-ca/ca/root-ca/private/root-ca.key \
   -tls-cert x-ca/ca/tls-ca.crt \
@@ -73,11 +83,11 @@ git clone git@github.com:x-ca/ca.git x-ca
 - sign domain
 
 ```
-bin/xca -cn xiexianbin.cn \
+xca -cn xiexianbin.cn \
   --domains "*.xiexianbin.cn,*.80.xyz" \
   --ips 100.80.0.128 \
   -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key
+  -tls-key x-ca/ca/tls-ca/private/[tls-ca.key | tls-ca-des3.key]
 ```
 
 - test cert
@@ -86,12 +96,17 @@ bin/xca -cn xiexianbin.cn \
 docker run -it -d \
   -p 8443:443 \
   -v $(pwd)/examples/default.conf:/etc/nginx/conf.d/default.conf \
-  -v $(pwd)/certs/xiexianbin.cn/xiexianbin.cn.bundle.crt:/etc/pki/nginx/server.crt \
-  -v $(pwd)/certs/xiexianbin.cn/xiexianbin.cn.key:/etc/pki/nginx/private/server.key \
+  -v $(pwd)/x-ca/certs/xiexianbin.cn/xiexianbin.cn.bundle.crt:/etc/pki/nginx/server.crt \
+  -v $(pwd)/x-ca/certs/xiexianbin.cn/xiexianbin.cn.key:/etc/pki/nginx/private/server.key \
   nginx
 ```
 
 visit https://dev.xiexianbin.cn:8443/
+
+## FaQ
+
+if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`), 
+Use `openssl rsa -in root-ca.key -des3` change cipher
 
 ## Ref
 

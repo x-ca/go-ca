@@ -25,29 +25,31 @@ import (
 )
 
 var (
-	createCa     bool
-	rootKeyPath  string
-	rootCertPath string
-	tlsKeyPath   string
-	tlsCertPath  string
-	tlsChainPath string
-	domainStr    string
-	commonName   string
-	domains      []string
-	ipStr        string
-	ips          []net.IP
-	help         bool
+	createCa       bool
+	rootKeyPath    string
+	rootCertPath   string
+	tlsKeyPath     string
+	tlsCertPath    string
+	tlsChainPath   string
+	tlsKeyPassword string
+	domainStr      string
+	commonName     string
+	domains        []string
+	ipStr          string
+	ips            []net.IP
+	help           bool
 )
 
 func init() {
 	flag.BoolVar(&createCa, "create-ca", false, "Create Root CA.")
-	flag.StringVar(&rootKeyPath, "root-key", "x-ca/ca/root-ca/private/root-ca.key", "Root private key file path, PEM/? format.")
+	flag.StringVar(&rootKeyPath, "root-key", "x-ca/ca/root-ca/private/root-ca.key", "Root private key file path, PEM format.")
 	flag.StringVar(&rootCertPath, "root-cert", "x-ca/ca/root-ca.crt", "Root certificate file path, PEM format.")
-	flag.StringVar(&tlsKeyPath, "tls-key", "x-ca/ca/tls-ca/private/tls-ca.key", "Second-Level private key file path, PEM/? format.")
+	flag.StringVar(&tlsKeyPath, "tls-key", "x-ca/ca/tls-ca/private/tls-ca.key", "Second-Level private key file path, PEM format.")
 	flag.StringVar(&tlsCertPath, "tls-cert", "x-ca/ca/tls-ca.crt", "Second-Level certificate file path, PEM format.")
 	flag.StringVar(&tlsChainPath, "tls-chain", "x-ca/ca/tls-ca-chain.pem", "Root/Second-Level CA Chain file path, PEM format.")
-	flag.StringVar(&commonName, "cn", "", "sign cert common name.")
+	flag.StringVar(&tlsKeyPassword, "tls-key-password", "", "tls key password, only work for load github.com/x-ca/x-ca.")
 	flag.StringVar(&domainStr, "domains", "", "Comma-Separated domain names.")
+	flag.StringVar(&commonName, "cn", "", "sign cert common name.")
 	flag.StringVar(&ipStr, "ips", "", "Comma-Separated IP addresses.")
 	flag.BoolVar(&help, "help", false, "show help message")
 
@@ -72,6 +74,9 @@ xca -cn xxxx \
 		fmt.Println()
 		fmt.Println("Usage:")
 		flag.PrintDefaults()
+		fmt.Println()
+		fmt.Println(`Source Code:
+  https://github.com/x-ca/go-ca`)
 	}
 }
 
@@ -143,7 +148,7 @@ func doCreateCa() error {
 func doSign() error {
 	var err error
 
-	tlsCA, err := ca.LoadTLSCA(tlsKeyPath, tlsCertPath)
+	tlsCA, err := ca.LoadTLSCA(tlsKeyPath, tlsCertPath, tlsKeyPassword)
 	if err != nil {
 		return err
 	}
