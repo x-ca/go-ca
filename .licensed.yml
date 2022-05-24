@@ -1,0 +1,18 @@
+sources:
+  bundler: true
+
+allowed:
+  - apache-2.0
+  - bsd-2-clause
+  - bsd-3-clause
+  - isc
+  - mit
+  - cc0-1.0
+  - unlicense
+
+reviewed:
+  bundler:
+    - pathname-common_prefix
+    - racc
+    - reverse_markdown
+    - ruby2_keywords

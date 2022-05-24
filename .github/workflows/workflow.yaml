@@ -1,0 +1,34 @@
+name: build-test
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.17.0-rc.2', '1.16.1' ]
+    name: Go ${{ matrix.go }} test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Check Go Version and Install Go Dep
+        run: |
+          go version
+          go mod vendor
+
+      - name: Test
+        run: make test && make build
