@@ -1,5 +1,9 @@
 # go-ca
 
+[![build-test](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml/badge.svg)](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml)
+[![GoDoc](https://godoc.org/github.com/x-ca/go-ca?status.svg)](https://pkg.go.dev/github.com/x-ca/go-ca)
+[![Go Report Card](https://goreportcard.com/badge/github.com/x-ca/go-ca)](https://goreportcard.com/report/github.com/x-ca/go-ca)
+
 golang x-ca client, which can simple Sign Self Root/Second-Level CA, and sign for Domains and IPs.
 
 shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)

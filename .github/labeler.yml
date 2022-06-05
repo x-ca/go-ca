@@ -1,0 +1,10 @@
+# https://github.com/actions/labeler/blob/master/README.md
+
+code:
+  - ./gsync/*
+
+license:
+  - ./LICENSE
+
+actions:
+  - .github/*
