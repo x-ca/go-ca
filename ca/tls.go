@@ -21,7 +21,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -73,8 +72,8 @@ func NewTLSCA(keyBits int, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) 
 
 // LoadTLSCA create new tls CA
 func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
-	keyBytes, kErr := ioutil.ReadFile(keyPath)
-	certBytes, cErr := ioutil.ReadFile(certPath)
+	keyBytes, kErr := os.ReadFile(keyPath)
+	certBytes, cErr := os.ReadFile(certPath)
 	if kErr != nil {
 		return nil, kErr
 	} else if cErr != nil {
@@ -143,7 +142,7 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	if certPKErr != nil {
 		return nil, certPKErr
 	}
-	if bytes.Compare(keyPKBytes, certPKBytes) != 0 {
+	if !bytes.Equal(keyPKBytes, certPKBytes) {
 		return nil, fmt.Errorf("public key in CA certificate %s don't match private key in %s", certPath, keyPath)
 	}
 
@@ -316,6 +315,9 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, ke
 	}
 
 	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return key, cert, nil
 }
@@ -368,14 +370,14 @@ func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Cer
 	}
 	defer certChainFile.Close()
 
-	certBytes, err := ioutil.ReadFile(certPath)
+	certBytes, err := os.ReadFile(certPath)
 	if err == nil {
 		_, err := certChainFile.Write(certBytes)
 		if err != nil {
 			return err
 		}
 	}
-	chainBytes, err := ioutil.ReadFile(tlsChainPath)
+	chainBytes, err := os.ReadFile(tlsChainPath)
 	if err == nil {
 		_, err := certChainFile.Write(chainBytes)
 		if err != nil {

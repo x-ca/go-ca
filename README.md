@@ -1,6 +1,6 @@
 # go-ca
 
-[![build-test](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml/badge.svg)](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml)
+[![build](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml/badge.svg)](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml)
 [![GoDoc](https://godoc.org/github.com/x-ca/go-ca?status.svg)](https://pkg.go.dev/github.com/x-ca/go-ca)
 [![Go Report Card](https://goreportcard.com/badge/github.com/x-ca/go-ca)](https://goreportcard.com/report/github.com/x-ca/go-ca)
 
@@ -109,7 +109,7 @@ visit https://dev.xiexianbin.cn:8443/
 
 ## FaQ
 
-if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`), 
+if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`),
 Use `openssl rsa -in root-ca.key -des3` change cipher
 
 ## Ref
