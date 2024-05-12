@@ -1,6 +1,6 @@
 # go-ca
 
-[![build-test](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml/badge.svg)](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml)
+[![build](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml/badge.svg)](https://github.com/x-ca/go-ca/actions/workflows/workflow.yaml)
 [![GoDoc](https://godoc.org/github.com/x-ca/go-ca?status.svg)](https://pkg.go.dev/github.com/x-ca/go-ca)
 [![Go Report Card](https://goreportcard.com/badge/github.com/x-ca/go-ca)](https://goreportcard.com/report/github.com/x-ca/go-ca)
 
@@ -11,7 +11,7 @@ shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
 ## install
 
 ```
-curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}
+curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}-{amd64|arm64|s390x|ppc64le}
 chmod +x xca
 mv xca /usr/local/bin/
 ```
@@ -58,6 +58,8 @@ Usage:
     	Second-Level private key file path, PEM format. (default "x-ca/ca/tls-ca/private/tls-ca.key")
   -tls-key-password string
     	tls key password, only work for load github.com/x-ca/x-ca.
+  -version
+    	show version info.
 
 Source Code:
   https://github.com/x-ca/go-ca
@@ -109,7 +111,7 @@ visit https://dev.xiexianbin.cn:8443/
 
 ## FaQ
 
-if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`), 
+if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`),
 Use `openssl rsa -in root-ca.key -des3` change cipher
 
 ## Ref

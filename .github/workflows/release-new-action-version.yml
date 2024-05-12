@@ -1,5 +1,12 @@
 name: Release new action version
 on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'run release action reason'
+        required: false
+        type: string
+        default: 'manually test'
   push:
     tags:
       - "v*.*.*"
@@ -8,14 +15,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Release
-        uses: softprops/action-gh-release@v1
-
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -40,8 +42,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
+            bin/xca-linux-amd64
+            bin/xca-linux-arm64
+            bin/xca-linux-ppc64le
+            bin/xca-linux-s390x
+            bin/xca-darwin-amd64
+            bin/xca-darwin-arm64
+            bin/xca-windows-amd64.exe
             Release.txt
             LICENSE
-            bin/xca-linux
-            bin/xca-darwin
-            bin/xca-windows

@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -65,7 +64,7 @@ func ParseDomains(domainStr []string) ([]string, error) {
 		if re.MatchString(s) {
 			domainSlice = append(domainSlice, s)
 		} else {
-			return nil, errors.New(fmt.Sprintf("invalid domain %s", s))
+			return nil, fmt.Errorf("invalid domain %s", s)
 		}
 	}
 
@@ -77,7 +76,7 @@ func ParseIPs(ipStr []string) ([]net.IP, error) {
 	for _, s := range ipStr {
 		p := net.ParseIP(s)
 		if p == nil {
-			return nil, errors.New(fmt.Sprintf("invalid IP %s", s))
+			return nil, fmt.Errorf("invalid IP %s", s)
 		}
 		ipSlice = append(ipSlice, p)
 	}

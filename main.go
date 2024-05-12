@@ -16,7 +16,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -38,6 +37,7 @@ var (
 	ipStr          string
 	ips            []net.IP
 	help           bool
+	showVersion    bool
 )
 
 func init() {
@@ -51,7 +51,8 @@ func init() {
 	flag.StringVar(&domainStr, "domains", "", "Comma-Separated domain names.")
 	flag.StringVar(&commonName, "cn", "", "sign cert common name.")
 	flag.StringVar(&ipStr, "ips", "", "Comma-Separated IP addresses.")
-	flag.BoolVar(&help, "help", false, "show help message")
+	flag.BoolVar(&help, "help", false, "show help message.")
+	flag.BoolVar(&showVersion, "version", false, "show version info.")
 
 	flag.Parse()
 
@@ -82,14 +83,14 @@ xca -cn xxxx \
 
 func check() error {
 	// check domains and ips
-	if createCa == false {
+	if !createCa {
 		if domainStr == "" && ipStr == "" {
 			return fmt.Errorf("domains and ips is empty")
 		}
-		if _, err := ioutil.ReadFile(tlsKeyPath); err != nil {
+		if _, err := os.ReadFile(tlsKeyPath); err != nil {
 			return err
 		}
-		if _, err := ioutil.ReadFile(tlsCertPath); err != nil {
+		if _, err := os.ReadFile(tlsCertPath); err != nil {
 			return err
 		}
 	}
@@ -115,7 +116,7 @@ func doCreateCa() error {
 
 	// if file is exist skip
 	for _, path := range []string{rootKeyPath, rootCertPath, tlsKeyPath, tlsCertPath} {
-		_, err := ioutil.ReadFile(path)
+		_, err := os.ReadFile(path)
 		if err != nil && os.IsNotExist(err) {
 			continue
 		} else {
@@ -166,13 +167,19 @@ func doSign() error {
 }
 
 func main() {
-	if help == true || len(os.Args) == 1 {
+	if help || len(os.Args) == 1 {
 		flag.Usage()
 		return
 	}
 
+	if showVersion {
+		v := GetVersion()
+		PrintVersion("go-ca", v, false)
+		return
+	}
+
 	// create CA
-	if createCa == true {
+	if createCa {
 		if err := doCreateCa(); err != nil {
 			fmt.Println(err.Error())
 			os.Exit(1)

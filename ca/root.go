@@ -21,7 +21,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -66,8 +65,8 @@ func NewRootCA(keyBits int) (*RootCA, error) {
 
 // LoadRootCA create new tls CA
 func LoadRootCA(keyPath, certPath, password string) (*RootCA, error) {
-	keyBytes, kErr := ioutil.ReadFile(keyPath)
-	certBytes, cErr := ioutil.ReadFile(certPath)
+	keyBytes, kErr := os.ReadFile(keyPath)
+	certBytes, cErr := os.ReadFile(certPath)
 	if kErr != nil {
 		return nil, kErr
 	} else if cErr != nil {
@@ -103,6 +102,11 @@ func LoadRootCA(keyPath, certPath, password string) (*RootCA, error) {
 	var key *rsa.PrivateKey
 	var err error
 	if x509.IsEncryptedPEMBlock(keyBlock) == true {
+		// https://pkg.go.dev/crypto/x509@go1.22.2#IsEncryptedPEMBlock
+		fmt.Println("Legacy PEM encryption as specified in RFC 1423 is insecure by design. " +
+			"Since it does not authenticate the ciphertext, it is vulnerable to padding " +
+			"oracle attacks that can let an attacker recover the plaintext.\n" +
+			"https://pkg.go.dev/crypto/x509@go1.22.2#IsEncryptedPEMBlock")
 		der, err := x509.DecryptPEMBlock(keyBlock, []byte(password))
 		if err != nil {
 			return nil, err
@@ -136,7 +140,7 @@ func LoadRootCA(keyPath, certPath, password string) (*RootCA, error) {
 	if certPKErr != nil {
 		return nil, certPKErr
 	}
-	if bytes.Compare(keyPKBytes, certPKBytes) != 0 {
+	if !bytes.Equal(keyPKBytes, certPKBytes) {
 		return nil, fmt.Errorf("public key in CA certificate %s don't match private key in %s", certPath, keyPath)
 	}
 
