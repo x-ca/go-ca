@@ -28,7 +28,7 @@ darwin-amd64: GOARGS = GOOS=darwin GOARCH=amd64
 darwin-arm64: GOARGS = GOOS=darwin GOARCH=arm64
 windows-amd64: GOARGS = GOOS=windows GOARCH=amd64
 
-BINARY_NAME  ?= main
+BINARY_NAME  ?= xca
 IMG          ?= xiexianbin/go-actions-demo:latest
 
 ifeq ($(RELEASE_TAG),true)

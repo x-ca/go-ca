@@ -11,7 +11,7 @@ shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
 ## install
 
 ```
-curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}
+curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}-{amd64|arm64|s390x|ppc64le}
 chmod +x xca
 mv xca /usr/local/bin/
 ```
@@ -58,6 +58,8 @@ Usage:
     	Second-Level private key file path, PEM format. (default "x-ca/ca/tls-ca/private/tls-ca.key")
   -tls-key-password string
     	tls key password, only work for load github.com/x-ca/x-ca.
+  -version
+    	show version info.
 
 Source Code:
   https://github.com/x-ca/go-ca
