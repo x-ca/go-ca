@@ -37,6 +37,7 @@ var (
 	ipStr          string
 	ips            []net.IP
 	help           bool
+	showVersion    bool
 )
 
 func init() {
@@ -50,7 +51,8 @@ func init() {
 	flag.StringVar(&domainStr, "domains", "", "Comma-Separated domain names.")
 	flag.StringVar(&commonName, "cn", "", "sign cert common name.")
 	flag.StringVar(&ipStr, "ips", "", "Comma-Separated IP addresses.")
-	flag.BoolVar(&help, "help", false, "show help message")
+	flag.BoolVar(&help, "help", false, "show help message.")
+	flag.BoolVar(&showVersion, "version", false, "show version info.")
 
 	flag.Parse()
 
@@ -167,6 +169,12 @@ func doSign() error {
 func main() {
 	if help || len(os.Args) == 1 {
 		flag.Usage()
+		return
+	}
+
+	if showVersion {
+		v := GetVersion()
+		PrintVersion("go-ca", v, false)
 		return
 	}
 

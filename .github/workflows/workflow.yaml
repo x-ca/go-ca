@@ -1,8 +1,21 @@
-name: build-test
+name: workflow
 on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'run action reason'
+        required: false
+        type: string
+        default: 'manually test'
   push:
     branches:
       - main
+      - dev
+      - bug/**
+      - fix/**
+      - bugfix/**
+      - feature/**
+      - release/**
     paths-ignore:
       - '**.md'
   pull_request:
@@ -14,14 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.17.0-rc.2', '1.16.1' ]
+        go: [ '1.19.11', '1.20.6', '1.21.10' ]
     name: Go ${{ matrix.go }} test
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
 

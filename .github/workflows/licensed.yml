@@ -1,6 +1,13 @@
 name: Licensed
 
 on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'run license action reason'
+        required: false
+        type: string
+        default: 'manually test'
   push:
     branches:
       - main
