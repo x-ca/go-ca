@@ -15,6 +15,8 @@ package ca
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -39,18 +41,20 @@ const (
 )
 
 type TLSCA struct {
-	Key     *rsa.PrivateKey
+	Key     any // *rsa.PrivateKey or *ecdsa.PrivateKey
 	Cert    *x509.Certificate
-	KeyBits int // 1024 * 2^x
+	KeyBits int    // 1024 * 2^x
+	Curve   string // P224, P256, P384, P521
 
 	RootCert *x509.Certificate
-	RootKey  *rsa.PrivateKey
+	RootKey  any // *rsa.PrivateKey or *ecdsa.PrivateKey
 }
 
 // NewTLSCA create new tls CA
-func NewTLSCA(keyBits int, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) (*TLSCA, error) {
+func NewTLSCA(keyType string, keyBits int, curve string, rootCert *x509.Certificate, rootKey any) (*TLSCA, error) {
 	tlsCA := &TLSCA{
 		KeyBits: keyBits,
+		Curve:   curve,
 	}
 	if rootCert != nil {
 		tlsCA.RootCert = rootCert
@@ -59,7 +63,7 @@ func NewTLSCA(keyBits int, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) 
 		tlsCA.RootKey = rootKey
 	}
 
-	if err := tlsCA.CreateKey(); err != nil {
+	if err := tlsCA.CreateKey(keyType); err != nil {
 		return nil, err
 	}
 
@@ -84,7 +88,11 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	keyBlock, _ := pem.Decode(keyBytes)
 	if keyBlock == nil {
 		return nil, fmt.Errorf("decode key is nil")
-	} else if supportPemType[sort.SearchStrings(supportPemType, keyBlock.Type)] != keyBlock.Type {
+	}
+
+	// Check if PEM type is supported
+	index := sort.SearchStrings(supportPemType, keyBlock.Type)
+	if index >= len(supportPemType) || supportPemType[index] != keyBlock.Type {
 		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
 	}
 
@@ -93,29 +101,28 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	 * https://security.stackexchange.com/questions/93417/what-encryption-is-applied-on-a-key-generated-by-openssl-req
 	 * https://rfc-editor.org/rfc/rfc1423.html
 	 * openssl asn1parse -in root-ca.key -i | cut -c-90
-	 * - golang code
 	 *
-	 * if x509.IsEncryptedPEMBlock(keyBlock) == true {
-	 *    der, err := x509.DecryptPEMBlock(keyBlock, []byte("pwd"))
-	 *    key, _ = x509.ParsePKCS1PrivateKey(der)
-	 * } else {
-	 *    key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
-	 * }
-	 *
-	 * Raise error: `Error: fromPEMBytes: x509: no DEK-Info header in block`
-	 *
-	 * - fix run: `openssl rsa -in root-ca.key -des3`
+	 * Note: The deprecated x509.IsEncryptedPEMBlock and x509.DecryptPEMBlock functions
+	 * have been replaced with direct PEM header checking
 	 */
-	var key *rsa.PrivateKey
+	var key any
 	var err error
-	if x509.IsEncryptedPEMBlock(keyBlock) == true {
-		der, err := x509.DecryptPEMBlock(keyBlock, []byte(password))
-		if err != nil {
-			return nil, err
-		}
-		key, _ = x509.ParsePKCS1PrivateKey(der)
-	} else {
+
+	// Check if the PEM block is encrypted by checking for headers
+	isEncrypted := len(keyBlock.Headers) > 0 && keyBlock.Headers["Proc-Type"] == "4,ENCRYPTED"
+	if isEncrypted {
+		// Since x509.DecryptPEMBlock is deprecated, we recommend users decrypt their keys first
+		return nil, fmt.Errorf("encrypted PEM blocks are not supported - please decrypt your key first using: openssl rsa -in encrypted.key -out decrypted.key")
+	}
+
+	// Parse the unencrypted key
+	switch keyBlock.Type {
+	case "RSA PRIVATE KEY":
 		key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	case "EC PRIVATE KEY":
+		key, err = x509.ParseECPrivateKey(keyBlock.Bytes)
+	default:
+		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load private key %s, error %s", keyPath, err)
@@ -134,7 +141,14 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	}
 
 	// compare key and cert match?
-	keyPKBytes, keyPKErr := x509.MarshalPKIXPublicKey(key.Public())
+	var pubKey any
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		pubKey = k.Public()
+	case *ecdsa.PrivateKey:
+		pubKey = k.Public()
+	}
+	keyPKBytes, keyPKErr := x509.MarshalPKIXPublicKey(pubKey)
 	if keyPKErr != nil {
 		return nil, keyPKErr
 	}
@@ -155,12 +169,36 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 }
 
 // CreateKey create tls key
-func (c *TLSCA) CreateKey() error {
-	tlsKey, err := rsa.GenerateKey(rand.Reader, c.KeyBits)
-	if err != nil {
-		return err
+func (c *TLSCA) CreateKey(keyType string) error {
+	switch strings.ToLower(keyType) {
+	case "ec", "ecdsa":
+		var curve elliptic.Curve
+		switch c.Curve {
+		case "P224":
+			curve = elliptic.P224()
+		case "P256":
+			curve = elliptic.P256()
+		case "P384":
+			curve = elliptic.P384()
+		case "P521":
+			curve = elliptic.P521()
+		default:
+			return fmt.Errorf("unsupport curve %s", c.Curve)
+		}
+		tlsKey, err := ecdsa.GenerateKey(curve, rand.Reader)
+		if err != nil {
+			return err
+		}
+		c.Key = tlsKey
+	case "rsa":
+		tlsKey, err := rsa.GenerateKey(rand.Reader, c.KeyBits)
+		if err != nil {
+			return err
+		}
+		c.Key = tlsKey
+	default:
+		return fmt.Errorf("unsupport key type %s", keyType)
 	}
-	c.Key = tlsKey
 	return nil
 }
 
@@ -186,7 +224,15 @@ func (c *TLSCA) CreateCert() error {
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 	}
 
-	der, err := x509.CreateCertificate(rand.Reader, tlsCSR, c.RootCert, c.Key.Public(), c.RootKey)
+	var pubKey any
+	switch k := c.Key.(type) {
+	case *rsa.PrivateKey:
+		pubKey = k.Public()
+	case *ecdsa.PrivateKey:
+		pubKey = k.Public()
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tlsCSR, c.RootCert, pubKey, c.RootKey)
 	if err != nil {
 		return err
 	}
@@ -220,9 +266,23 @@ func (c *TLSCA) Write(keyPath, certPath, chainPath string) error {
 	}
 	defer keyFile.Close()
 
+	var keyType string
+	var keyBytes []byte
+	switch k := c.Key.(type) {
+	case *rsa.PrivateKey:
+		keyType = "RSA PRIVATE KEY"
+		keyBytes = x509.MarshalPKCS1PrivateKey(k)
+	case *ecdsa.PrivateKey:
+		keyType = "EC PRIVATE KEY"
+		keyBytes, err = x509.MarshalECPrivateKey(k)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = pem.Encode(keyFile, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(c.Key),
+		Type:  keyType,
+		Bytes: keyBytes,
 	})
 	if err != nil {
 		return err
@@ -271,7 +331,7 @@ func (c *TLSCA) Write(keyPath, certPath, chainPath string) error {
 	return nil
 }
 
-func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, keyBits int) (*rsa.PrivateKey, *x509.Certificate, error) {
+func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days int, keyType string, keyBits int, curve string) (any, *x509.Certificate, error) {
 	if keyBits%1024 != 0 {
 		keyBits = 1024 * 4
 	}
@@ -280,9 +340,34 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, ke
 	}
 
 	// generate key
-	key, err := rsa.GenerateKey(rand.Reader, keyBits)
-	if err != nil {
-		return nil, nil, err
+	var key any
+	var err error
+	switch strings.ToLower(keyType) {
+	case "ec", "ecdsa":
+		var ecCurve elliptic.Curve
+		switch curve {
+		case "P224":
+			ecCurve = elliptic.P224()
+		case "P256":
+			ecCurve = elliptic.P256()
+		case "P384":
+			ecCurve = elliptic.P384()
+		case "P521":
+			ecCurve = elliptic.P521()
+		default:
+			return nil, nil, fmt.Errorf("unsupport curve %s", curve)
+		}
+		key, err = ecdsa.GenerateKey(ecCurve, rand.Reader)
+		if err != nil {
+			return nil, nil, err
+		}
+	case "rsa":
+		key, err = rsa.GenerateKey(rand.Reader, keyBits)
+		if err != nil {
+			return nil, nil, err
+		}
+	default:
+		return nil, nil, fmt.Errorf("unsupport key type %s", keyType)
 	}
 
 	// create csr
@@ -308,8 +393,16 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, ke
 		csr.IPAddresses = ips
 	}
 
+	var pubKey any
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		pubKey = k.Public()
+	case *ecdsa.PrivateKey:
+		pubKey = k.Public()
+	}
+
 	// create cert
-	der, err := x509.CreateCertificate(rand.Reader, csr, c.Cert, key.Public(), c.Key)
+	der, err := x509.CreateCertificate(rand.Reader, csr, c.Cert, pubKey, c.Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -322,7 +415,7 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days, ke
 	return key, cert, nil
 }
 
-func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Certificate, tlsChainPath string) error {
+func (c *TLSCA) WriteCert(commonName string, key any, cert *x509.Certificate, tlsChainPath string) error {
 	// mkdir
 	var dir = strings.Replace(commonName, "*.", "", -1)
 	err := os.MkdirAll(fmt.Sprintf("x-ca/certs/%s", dir), 0700)
@@ -338,9 +431,23 @@ func (c *TLSCA) WriteCert(commonName string, key *rsa.PrivateKey, cert *x509.Cer
 	}
 	defer keyFile.Close()
 
+	var keyType string
+	var keyBytes []byte
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		keyType = "RSA PRIVATE KEY"
+		keyBytes = x509.MarshalPKCS1PrivateKey(k)
+	case *ecdsa.PrivateKey:
+		keyType = "EC PRIVATE KEY"
+		keyBytes, err = x509.MarshalECPrivateKey(k)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = pem.Encode(keyFile, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
+		Type:  keyType,
+		Bytes: keyBytes,
 	})
 	if err != nil {
 		return err

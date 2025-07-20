@@ -14,8 +14,9 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 .DS_Store
-bin/
 .history/
 .idea/
 .lh/
+bin/
+vendor
 x-ca
