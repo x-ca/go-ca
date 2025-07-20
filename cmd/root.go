@@ -55,6 +55,7 @@ func init() {
 
 	// Add subcommands
 	rootCmd.AddCommand(createCaCmd)
+	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(signCmd)
 }
 
