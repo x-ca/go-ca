@@ -59,12 +59,13 @@ Examples:
 }
 
 func initSignCmd() {
+	xcarootpath := ca.GetEnvDefault(ca.XCARootPath, "x-ca")
 	signCmd.Flags().StringVar(&signDomains, "domains", "", "Comma-separated domain names")
 	signCmd.Flags().StringVar(&signIPs, "ips", "", "Comma-separated IP addresses")
-	signCmd.Flags().StringVar(&signTlsKey, "tls-key", "x-ca/ca/tls-ca/private/tls-ca.key", "TLS CA private key file path")
-	signCmd.Flags().StringVar(&signTlsCert, "tls-cert", "x-ca/ca/tls-ca.crt", "TLS CA certificate file path")
-	signCmd.Flags().StringVar(&signTlsChain, "tls-chain", "x-ca/ca/tls-ca-chain.pem", "TLS CA chain file path")
-	signCmd.Flags().StringVar(&signKeyType, "key-type", "ec", "Key type (rsa or ec)")
+	signCmd.Flags().StringVar(&signTlsKey, "tls-key", xcarootpath+"/ca/tls-ca/private/tls-ca.key", "TLS CA private key file path")
+	signCmd.Flags().StringVar(&signTlsCert, "tls-cert", xcarootpath+"/ca/tls-ca.crt", "TLS CA certificate file path")
+	signCmd.Flags().StringVar(&signTlsChain, "tls-chain", xcarootpath+"/ca/tls-ca-chain.pem", "TLS CA chain file path")
+	signCmd.Flags().StringVar(&signKeyType, "key-type", ca.DefaultKeyType, "Key type (rsa or ec)")
 	signCmd.Flags().IntVar(&signKeyBits, "key-bits", ca.DefaultKeyBits, "RSA key bits")
 	signCmd.Flags().StringVar(&signCurve, "curve", ca.DefaultCurve, "EC curve (P224, P256, P384, P521)")
 	signCmd.Flags().IntVar(&signDays, "days", 825, "Certificate validity in days")

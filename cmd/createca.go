@@ -52,12 +52,13 @@ Examples:
 }
 
 func initCreateCACmd() {
-	createCaCmd.Flags().StringVar(&createCaRootCert, "root-cert", "x-ca/ca/root-ca.crt", "Root certificate file path")
-	createCaCmd.Flags().StringVar(&createCaRootKey, "root-key", "x-ca/ca/root-ca/private/root-ca.key", "Root private key file path")
-	createCaCmd.Flags().StringVar(&createCaTlsCert, "tls-cert", "x-ca/ca/tls-ca.crt", "TLS certificate file path")
-	createCaCmd.Flags().StringVar(&createCaTlsKey, "tls-key", "x-ca/ca/tls-ca/private/tls-ca.key", "TLS private key file path")
-	createCaCmd.Flags().StringVar(&createCaTlsChain, "tls-chain", "x-ca/ca/tls-ca-chain.pem", "TLS CA chain file path")
-	createCaCmd.Flags().StringVar(&createCaKeyType, "key-type", "rsa", "Key type (rsa or ec)")
+	xcarootpath := ca.GetEnvDefault(ca.XCARootPath, "x-ca")
+	createCaCmd.Flags().StringVar(&createCaRootCert, "root-cert", xcarootpath+"/ca/root-ca.crt", "Root certificate file path")
+	createCaCmd.Flags().StringVar(&createCaRootKey, "root-key", xcarootpath+"/ca/root-ca/private/root-ca.key", "Root private key file path")
+	createCaCmd.Flags().StringVar(&createCaTlsCert, "tls-cert", xcarootpath+"/ca/tls-ca.crt", "TLS certificate file path")
+	createCaCmd.Flags().StringVar(&createCaTlsKey, "tls-key", xcarootpath+"/ca/tls-ca/private/tls-ca.key", "TLS private key file path")
+	createCaCmd.Flags().StringVar(&createCaTlsChain, "tls-chain", xcarootpath+"/ca/tls-ca-chain.pem", "TLS CA chain file path")
+	createCaCmd.Flags().StringVar(&createCaKeyType, "key-type", ca.DefaultKeyType, "Key type (rsa or ec)")
 	createCaCmd.Flags().IntVar(&createCaKeyBits, "key-bits", ca.DefaultKeyBits, "RSA key bits")
 	createCaCmd.Flags().StringVar(&createCaCurve, "curve", ca.DefaultCurve, "EC curve (P224, P256, P384, P521)")
 }

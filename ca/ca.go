@@ -22,7 +22,8 @@ import (
 )
 
 var (
-	supportPemType = []string{"ECDSA PRIVATE KEY", "RSA PRIVATE KEY"}
+	// sort.StringsAreSorted(supportPemType) == true
+	supportPemType = []string{"EC PRIVATE KEY", "ECDSA PRIVATE KEY", "RSA PRIVATE KEY"}
 )
 
 // RootCA represents a root certificate authority

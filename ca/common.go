@@ -30,11 +30,13 @@ import (
 	"net"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 )
 
 // Common CA constants
 const (
+	DefaultKeyType = "ec"
 	DefaultKeyBits = 2048
 	DefaultCurve   = "P256"
 
@@ -43,6 +45,8 @@ const (
 	RootCertOrganizationalUnit = "www.xiexianbin.cn"
 	RootCertCN                 = "X Root CA - R1"
 	RootCertYears              = 60
+
+	XCARootPath = "XCA_ROOT_PATH"
 )
 
 // CreateCertificateChain writes a certificate chain to file
@@ -163,8 +167,6 @@ func ParseDomains(domainStr []string) ([]string, error) {
 	for _, s := range domainStr {
 		if re.MatchString(s) {
 			domainSlice = append(domainSlice, s)
-		} else {
-			return nil, fmt.Errorf("invalid domain %s", s)
 		}
 	}
 
@@ -183,4 +185,20 @@ func ParseIPs(ipStr []string) (ipSlice []net.IP, err error) {
 		ipSlice = append(ipSlice, p)
 	}
 	return ipSlice, nil
+}
+
+func GetEnvDefault(key, defVal string) string {
+	val, ex := os.LookupEnv(key)
+	if !ex {
+		return defVal
+	}
+	return val
+}
+
+func ExecPath() (string, error) {
+	ex, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(ex), nil
 }

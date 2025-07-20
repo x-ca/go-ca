@@ -24,18 +24,25 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "xca",
 	Short: "X Certificate Authority management tool",
-	Long: `XCA is a command-line tool for creating and managing Certificate Authorities (CAs)
+	Long: `XCA is a command-line tool for creating and managing Root/Second-Level Certificate Authorities (CAs)
 and signing certificates for domains and IP addresses.
 
 Available Commands:
   create-ca   Create root and TLS CA certificates
+	info        Display information about Certificates
   sign        Sign a certificate for domains and/or IPs
   version     Show version information
+
+Environment:
+  XCA_ROOT_PATH  Which path to store Root/Second-Level/TLS cert, default is "$(pwd)/x-ca"
 
 Examples:
   xca create-ca --key-type ec --curve P256
   xca sign example.com --domains "example.com,www.example.com"
-  xca sign 192.168.1.1 --ips "192.168.1.1"`,
+  xca sign 192.168.1.1 --ips "192.168.1.1"
+
+Source Code:
+  https://github.com/x-ca/go-ca	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no subcommand, show help
 		cmd.Help()

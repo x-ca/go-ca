@@ -319,7 +319,7 @@ func printHexBlock(prefix string, data []byte, wrap int) {
 // infoCmd represents the info command
 var infoCmd = &cobra.Command{
 	Use:   "info",
-	Short: "Display information about the XCA tool",
+	Short: "Display information about Certificates",
 	Long: `Display information about Certificate, like 'openssl x509 -noout -text -in xxx.crt' including version, and basic information.
 
 Examples:
