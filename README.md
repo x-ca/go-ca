@@ -11,10 +11,18 @@ golang x-ca client, which can simple Sign Self Root/Second-Level CA, and sign fo
 
 ## install
 
+- binary
+
 ```
-curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}-{amd64|arm64|s390x|ppc64le}
+curl -Lfs -o xca https://github.com/x-ca/go-ca/releases/latest/download/xca-{linux|darwin|windows}-{amd64|arm64|s390x|ppc64le}-{amd64|arm64}
 chmod +x xca
 mv xca /usr/local/bin/
+```
+
+- source
+
+```
+go install go.xiexianbin.cn/xca/cmd@latest
 ```
 
 ## Help

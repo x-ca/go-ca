@@ -1,4 +1,4 @@
-module go.xiexianbin.cn/x-ca
+module go.xiexianbin.cn/xca
 
 go 1.21
 

@@ -27,14 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.19.11', '1.20.6', '1.21.10' ]
+        go: ['1.21.13', '1.22.12', '1.23.11', '1.24.5']
     name: Go ${{ matrix.go }} test
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
