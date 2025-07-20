@@ -18,11 +18,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	xca "go.xiexianbin.cn/x-ca"
-)
-
-var (
-	showVersion bool
 )
 
 // rootCmd represents the base command
@@ -41,22 +36,18 @@ Examples:
   xca create-ca --key-type ec --curve P256
   xca sign example.com --domains "example.com,www.example.com"
   xca sign 192.168.1.1 --ips "192.168.1.1"`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if showVersion {
-			v := xca.GetVersion()
-			xca.PrintVersion("xca", v, false)
-			os.Exit(0)
-		}
+	Run: func(cmd *cobra.Command, args []string) {
+		// If no subcommand, show help
+		cmd.Help()
 	},
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "show version information")
-
 	// Add subcommands
 	rootCmd.AddCommand(createCaCmd)
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(signCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func initCommands() {

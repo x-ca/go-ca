@@ -176,3 +176,8 @@ xca create-ca --help
 xca sign --help
 
 ```
+
+
+1. readme
+2. 根据不同的系统，设置不同的目录
+3. version bug

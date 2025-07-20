@@ -57,7 +57,7 @@ func GetVersion() Version {
 }
 
 func PrintVersion(cliName string, version Version, short bool) {
-	fmt.Printf("%s: %s\n", cliName, version.Version)
+	fmt.Printf("%s(https://github.com/x-ca/go-ca): %s\n", cliName, version.Version)
 	if short {
 		return
 	}
