@@ -21,7 +21,7 @@ mv xca /usr/local/bin/
 ```
 $ xca --help
 Create Root CA and TLS CA:
-xca -create-ca true \
+xca -create-ca \
   -root-cert x-ca/ca/root-ca.crt \
   -root-key x-ca/ca/root-ca/private/root-ca.key \
   -tls-cert x-ca/ca/tls-ca.crt \
@@ -67,10 +67,37 @@ Source Code:
 
 ## Usage Demo
 
-- create ca
+### create EC CA
+
+You can specify the key type (`-key-type`) and curve (`-curve`) to create an EC root CA and TLS CA:
 
 ```
-xca -create-ca true \
+./xca -create-ca \
+  -root-cert x-ca/ca/root-ca.crt \
+  -root-key x-ca/ca/root-ca/private/root-ca.key \
+  -tls-cert x-ca/ca/tls-ca.crt \
+  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
+  -tls-chain x-ca/ca/tls-ca-chain.pem \
+  -key-type ec \
+  -curve P256
+```
+
+To sign a certificate with an EC key:
+
+```
+./xca -cn example.com \
+  --domains "example.com" \
+  -tls-cert x-ca/ca/tls-ca.crt \
+  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
+  -tls-chain x-ca/ca/tls-ca-chain.pem \
+  -key-type ec \
+  -curve P256
+```
+
+### create RSA CA
+
+```
+xca -create-ca \
   -root-cert x-ca/ca/root-ca.crt \
   -root-key x-ca/ca/root-ca/private/root-ca.key \
   -tls-cert x-ca/ca/tls-ca.crt \
@@ -117,3 +144,35 @@ Use `openssl rsa -in root-ca.key -des3` change cipher
 ## Ref
 
 - [基于OpenSSL签署根CA、二级CA](https://www.xiexianbin.cn/s/ca/)
+
+```
+go.mod - Added cobra dependency
+ca/baseca.go - Common CA functionality
+ca/common.go - Shared utilities
+cmd/create.go - create-ca command
+cmd/sign.go - sign command
+cmd/root.go - root cobra command
+cmd/xca.go - main entry point (refactored)
+```
+
+## Usage Examples
+
+```
+
+go build -o bin/xca ./cmd/...
+
+# Create CA certificates
+xca create-ca --key-type ec --curve P256
+
+# Sign domain certificate
+xca sign example.com --domains "example.com,www.example.com"
+
+# Sign IP certificate
+xca sign 192.168.1.1 --ips "192.168.1.1"
+
+# Get help
+xca --help
+xca create-ca --help
+xca sign --help
+
+```

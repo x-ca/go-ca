@@ -69,40 +69,40 @@ clean: ## Run clean bin files
 
 .PHONY: build
 build:  ## Build for current os
-	${SUB_BUILD_CMD} -o bin/$(BINARY_NAME)
+	${SUB_BUILD_CMD} -o bin/$(BINARY_NAME) ./cmd/...
 
 .PHONY: linux-amd64
 linux-amd64:  ## Build linux amd64
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: linux-arm64
 linux-arm64:  ## Build linux arm64
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: linux-ppc64le
 linux-ppc64le:  ## Build linux ppc64le
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: linux-s390x
 linux-s390x:  ## Build linux s390x
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: darwin-amd64
 darwin-amd64:  ## Build darwin amd64
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: darwin-arm64
 darwin-arm64:  ## Build darwin arm64
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@ ./cmd/...
 
 .PHONY: windows-amd64
 windows-amd64:  ## Build windows amd64
-	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@.exe
+	CGO_ENABLED=0 ${GOARGS} ${SUB_BUILD_CMD} -o bin/${BINARY_NAME}-$@.exe ./cmd/...
 
-.PHONY: docker-build
-docker-build: test  ## Build docker image
-	docker build -t ${IMG} .
+# .PHONY: docker-build
+# docker-build: test  ## Build docker image
+# 	docker build -t ${IMG} .
 
-.PHONY: docker-push
-docker-push:  ## Push docker image
-	docker push ${IMG}
+# .PHONY: docker-push
+# docker-push:  ## Push docker image
+# 	docker push ${IMG}
