@@ -19,7 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.xiexianbin.cn/x-ca/ca"
+	"go.xiexianbin.cn/xca/ca"
 )
 
 var (

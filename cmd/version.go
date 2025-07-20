@@ -15,7 +15,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	xca "go.xiexianbin.cn/x-ca"
+	xca "go.xiexianbin.cn/xca"
 )
 
 // versionCmd represents the version command

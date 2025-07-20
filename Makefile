@@ -40,13 +40,13 @@ endif
 
 # -X github.com/xiexianbin/go-actions-demo.version=$(VERSION)
 override LDFLAGS += \
-  -X main.version=$(VERSION) \
-  -X main.buildDate=$(BUILD_DATE) \
-	-X main.gitCommit=$(GIT_COMMIT) \
-  -X main.gitTreeState=$(GIT_TREE_STATE)
+  -X go.xiexianbin.cn/xca.version=$(VERSION) \
+  -X go.xiexianbin.cn/xca.buildDate=$(BUILD_DATE) \
+	-X go.xiexianbin.cn/xca.gitCommit=$(GIT_COMMIT) \
+  -X go.xiexianbin.cn/xca.gitTreeState=$(GIT_TREE_STATE)
 
 ifneq ($(GIT_TAG),)
-override LDFLAGS += -X main.gitTag=${GIT_TAG}
+override LDFLAGS += -X go.xiexianbin.cn/xca.gitTag=${GIT_TAG}
 endif
 
 SUB_BUILD_CMD ?= $(GOBUILD)  -gcflags '${GCFLAGS}' -ldflags '${LDFLAGS}  -extldflags -static'
