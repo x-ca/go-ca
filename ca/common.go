@@ -180,7 +180,7 @@ func ParseIPs(ipStr []string) (ipSlice []net.IP, err error) {
 		}
 		p := net.ParseIP(s)
 		if p == nil {
-			return nil, fmt.Errorf("invalid IP %s", s)
+			continue
 		}
 		ipSlice = append(ipSlice, p)
 	}

@@ -6,7 +6,8 @@
 
 golang x-ca client, which can simple Sign Self Root/Second-Level CA, and sign for Domains and IPs.
 
-shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
+- shell implement at [x-ca/x-ca](https://github.com/x-ca/x-ca)
+- [import Self Sign CA To System](https://www.xiexianbin.cn/http/ssl/2017-02-15-openssl-self-sign-ca/#导出导入自签名证书) `x-ca/ca/root-ca.crt` and `x-ca/ca/tls-ca.crt` to trust Your CA.
 
 ## install
 
@@ -19,47 +20,29 @@ mv xca /usr/local/bin/
 ## Help
 
 ```
+xca --help
+xca create-ca --help
+xca sign --help
+```
+
+```
 $ xca --help
-Create Root CA and TLS CA:
-xca -create-ca \
-  -root-cert x-ca/ca/root-ca.crt \
-  -root-key x-ca/ca/root-ca/private/root-ca.key \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
-  -tls-chain x-ca/ca/tls-ca-chain.pem
+XCA is a command-line tool for creating and managing Root/Second-Level Certificate Authorities (CAs)
+and signing certificates for domains and IP addresses.
 
-Sign Domains or Ips:
-xca -cn xxxx \
-  --domains "xxx,xxx" --ips "xxx,xxx" \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
-  -tls-chain x-ca/ca/tls-ca-chain.pem
+Available Commands:
+  create-ca   Create root and TLS CA certificates
+  info        Display information about Certificates
+  sign        Sign a certificate for domains and/or IPs
+  version     Show version information
 
-Usage:
-  -cn string
-    	sign cert common name.
-  -create-ca
-    	Create Root CA.
-  -domains string
-    	Comma-Separated domain names.
-  -help
-    	show help message
-  -ips string
-    	Comma-Separated IP addresses.
-  -root-cert string
-    	Root certificate file path, PEM format. (default "x-ca/ca/root-ca.crt")
-  -root-key string
-    	Root private key file path, PEM format. (default "x-ca/ca/root-ca/private/root-ca.key")
-  -tls-cert string
-    	Second-Level certificate file path, PEM format. (default "x-ca/ca/tls-ca.crt")
-  -tls-chain string
-    	Root/Second-Level CA Chain file path, PEM format. (default "x-ca/ca/tls-ca-chain.pem")
-  -tls-key string
-    	Second-Level private key file path, PEM format. (default "x-ca/ca/tls-ca/private/tls-ca.key")
-  -tls-key-password string
-    	tls key password, only work for load github.com/x-ca/x-ca.
-  -version
-    	show version info.
+Environment:
+  XCA_ROOT_PATH  Which path to store Root/Second-Level/TLS cert, default is "$(pwd)/x-ca"
+
+Examples:
+  xca create-ca --key-type ec --curve P256
+  xca sign example.com --domains "example.com,www.example.com"
+  xca sign 192.168.1.1 --ips "192.168.1.1"
 
 Source Code:
   https://github.com/x-ca/go-ca
@@ -67,60 +50,40 @@ Source Code:
 
 ## Usage Demo
 
-### create EC CA
-
 You can specify the key type (`-key-type`) and curve (`-curve`) to create an EC root CA and TLS CA:
 
 ```
-./xca -create-ca \
-  -root-cert x-ca/ca/root-ca.crt \
-  -root-key x-ca/ca/root-ca/private/root-ca.key \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
-  -tls-chain x-ca/ca/tls-ca-chain.pem \
-  -key-type ec \
-  -curve P256
-```
+# Create EC CA
+$ xca create-ca --key-type ec --curve P256
 
-To sign a certificate with an EC key:
+# default out `x-ca/...`
+$ tree x-ca
+x-ca
+└── ca
+    ├── root-ca
+    │   └── private
+    │       └── root-ca.key
+    ├── root-ca.crt
+    ├── tls-ca
+    │   └── private
+    │       └── tls-ca.key
+    ├── tls-ca-chain.pem
+    └── tls-ca.crt
 
-```
-./xca -cn example.com \
-  --domains "example.com" \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key \
-  -tls-chain x-ca/ca/tls-ca-chain.pem \
-  -key-type ec \
-  -curve P256
-```
+6 directories, 5 files
 
-### create RSA CA
+# Show CA info
+$ xca info ./x-ca/ca/root-ca.crt
+$ xca info ./x-ca/ca/tls-ca.crt
 
-```
-xca -create-ca \
-  -root-cert x-ca/ca/root-ca.crt \
-  -root-key x-ca/ca/root-ca/private/root-ca.key \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/tls-ca.key
-```
+# Sign Domains certificate
+xca sign example.com --domains "example.com,www.example.com"
 
-[install](https://www.xiexianbin.cn/http/ssl/2017-02-15-openssl-self-sign-ca/#导出导入自签名证书) `x-ca/ca/root-ca.crt` and `x-ca/ca/tls-ca.crt` to trust Your CA.
+# Sign Domains and IPs certificate
+$ xca sign xiexianbin.cn --ips "192.168.1.1,*.xiexianbin.cn,*.dev.xiexianbin.cn"
 
-- or use x-ca
-
-```
-mkdir path
-git clone git@github.com:x-ca/ca.git x-ca
-```
-
-- sign domain
-
-```
-xca -cn xiexianbin.cn \
-  --domains "*.xiexianbin.cn,*.80.xyz" \
-  --ips 100.80.0.128 \
-  -tls-cert x-ca/ca/tls-ca.crt \
-  -tls-key x-ca/ca/tls-ca/private/[tls-ca.key | tls-ca-des3.key]
+# Show TLS cert info
+$ xca info ./x-ca/certs/xiexianbin.cn/xiexianbin.cn.crt
 ```
 
 - test cert
@@ -134,16 +97,15 @@ docker run -it -d \
   nginx
 ```
 
-visit https://dev.xiexianbin.cn:8443/
+- to verify, visit https://dev.xiexianbin.cn:8443/ in brower or run command:
 
-## FaQ
+```
+curl -i -v -k https://dev.xiexianbin.cn:8443/ --resolve dev.xiexianbin.cn:8443:127.0.0.1
+```
 
-if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`),
-Use `openssl rsa -in root-ca.key -des3` change cipher
+## Dev
 
-## Ref
-
-- [基于OpenSSL签署根CA、二级CA](https://www.xiexianbin.cn/s/ca/)
+- core file
 
 ```
 go.mod - Added cobra dependency
@@ -155,29 +117,11 @@ cmd/root.go - root cobra command
 cmd/xca.go - main entry point (refactored)
 ```
 
-## Usage Examples
+## FaQ
 
-```
+if CA Cert begin with `BEGIN ENCRYPTED PRIVATE KEY`(raise `Error: fromPEMBytes: x509: no DEK-Info header in block`),
+Use `openssl rsa -in root-ca.key -des3` change cipher
 
-go build -o bin/xca ./cmd/...
+## Ref
 
-# Create CA certificates
-xca create-ca --key-type ec --curve P256
-
-# Sign domain certificate
-xca sign example.com --domains "example.com,www.example.com"
-
-# Sign IP certificate
-xca sign 192.168.1.1 --ips "192.168.1.1"
-
-# Get help
-xca --help
-xca create-ca --help
-xca sign --help
-
-```
-
-
-1. readme
-2. 根据不同的系统，设置不同的目录
-3. version bug
+- [基于OpenSSL签署根CA、二级CA](https://www.xiexianbin.cn/s/ca/)

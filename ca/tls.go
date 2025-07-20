@@ -88,7 +88,11 @@ func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
 	keyBlock, _ := pem.Decode(keyBytes)
 	if keyBlock == nil {
 		return nil, fmt.Errorf("decode key is nil")
-	} else if supportPemType[sort.SearchStrings(supportPemType, keyBlock.Type)] != keyBlock.Type {
+	}
+
+	// Check if PEM type is supported
+	index := sort.SearchStrings(supportPemType, keyBlock.Type)
+	if index >= len(supportPemType) || supportPemType[index] != keyBlock.Type {
 		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
 	}
 
