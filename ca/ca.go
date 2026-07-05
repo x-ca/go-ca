@@ -21,11 +21,6 @@ import (
 	"time"
 )
 
-var (
-	// sort.StringsAreSorted(supportPemType) == true
-	supportPemType = []string{"EC PRIVATE KEY", "ECDSA PRIVATE KEY", "RSA PRIVATE KEY"}
-)
-
 // RootCA represents a root certificate authority
 type RootCA struct {
 	BaseCA
@@ -51,28 +46,6 @@ func NewRootCA(keyType string, keyBits int, curve string) (*RootCA, error) {
 	return rootCA, nil
 }
 
-// LoadRootCA loads an existing root CA from files
-func LoadRootCA(keyPath, certPath, password string) (*RootCA, error) {
-	rootCA := &RootCA{
-		BaseCA: BaseCA{},
-	}
-
-	if err := rootCA.LoadKey(keyPath); err != nil {
-		return nil, fmt.Errorf("failed to load key: %w", err)
-	}
-
-	if err := rootCA.LoadCert(certPath); err != nil {
-		return nil, fmt.Errorf("failed to load certificate: %w", err)
-	}
-
-	// Validate key and certificate match
-	if err := ValidateKeyCertMatch(rootCA.Key, rootCA.Cert); err != nil {
-		return nil, fmt.Errorf("key and certificate don't match: %w", err)
-	}
-
-	return rootCA, nil
-}
-
 // CreateCert creates the root CA certificate
 func (c *RootCA) CreateCert() error {
 	pubKey, err := c.GetPublicKey()
@@ -85,9 +58,14 @@ func (c *RootCA) CreateCert() error {
 		return fmt.Errorf("failed to calculate key ID: %w", err)
 	}
 
+	serial, err := randSerial(1) // default root serial number is 1
+	if err != nil {
+		return fmt.Errorf("failed to generate serial: %w", err)
+	}
+
 	rootCSR := &x509.Certificate{
 		Version:      3,
-		SerialNumber: randSerial(1), // default root serial number is 1
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			Country:            []string{RootCertCountry},
 			Organization:       []string{RootCertOrganization},
@@ -120,8 +98,9 @@ func (c *RootCA) CreateCert() error {
 	return nil
 }
 
-// Write writes the root CA key and certificate to files
-func (c *RootCA) Write(rootKeyPath, rootCertPath, chainPath string) error {
+// Write writes the root CA key and certificate to files. A self-signed root
+// has no issuer, so — unlike TLSCA.Write — no chain file is written.
+func (c *RootCA) Write(rootKeyPath, rootCertPath string) error {
 	if err := c.WriteKey(rootKeyPath); err != nil {
 		return fmt.Errorf("failed to write key: %w", err)
 	}

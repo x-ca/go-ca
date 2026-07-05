@@ -20,3 +20,4 @@
 bin/
 vendor
 x-ca
+.claude/

@@ -79,7 +79,7 @@ func runCreateCa() error {
 	}
 
 	// Write root CA
-	if err := rootCA.Write(createCaRootKey, createCaRootCert, ""); err != nil {
+	if err := rootCA.Write(createCaRootKey, createCaRootCert); err != nil {
 		return fmt.Errorf("failed to write root CA: %w", err)
 	}
 

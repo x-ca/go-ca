@@ -24,17 +24,16 @@ import (
 )
 
 var (
-	signCommonName  string
-	signDomains     string
-	signIPs         string
-	signTlsKey      string
-	signTlsCert     string
-	signTlsChain    string
-	signKeyType     string
-	signKeyBits     int
-	signCurve       string
-	signDays        int
-	signKeyPassword string
+	signCommonName string
+	signDomains    string
+	signIPs        string
+	signTlsKey     string
+	signTlsCert    string
+	signTlsChain   string
+	signKeyType    string
+	signKeyBits    int
+	signCurve      string
+	signDays       int
 )
 
 // signCmd represents the sign command
@@ -69,7 +68,6 @@ func initSignCmd() {
 	signCmd.Flags().IntVar(&signKeyBits, "key-bits", ca.DefaultKeyBits, "RSA key bits")
 	signCmd.Flags().StringVar(&signCurve, "curve", ca.DefaultCurve, "EC curve (P224, P256, P384, P521)")
 	signCmd.Flags().IntVar(&signDays, "days", 825, "Certificate validity in days")
-	signCmd.Flags().StringVar(&signKeyPassword, "tls-key-password", "", "TLS key password (if encrypted)")
 }
 
 func runSign() error {
@@ -88,8 +86,8 @@ func runSign() error {
 		return fmt.Errorf("at least one domain or IP must be specified")
 	}
 
-	// Load TLS CA
-	tlsCA, err := ca.LoadTLSCA(signTlsKey, signTlsCert, signKeyPassword)
+	// Load TLS CA. Only unencrypted PEM keys are supported.
+	tlsCA, err := ca.LoadTLSCA(signTlsKey, signTlsCert)
 	if err != nil {
 		return fmt.Errorf("failed to load TLS CA: %w", err)
 	}
@@ -100,8 +98,9 @@ func runSign() error {
 		return fmt.Errorf("failed to sign certificate: %w", err)
 	}
 
-	// Write certificate
-	if err := tlsCA.WriteCert(signCommonName, key, cert, signTlsChain); err != nil {
+	// Write certificate under the same root path as the TLS CA
+	outputDir := ca.GetEnvDefault(ca.XCARootPath, "x-ca")
+	if err := tlsCA.WriteSignedCert(outputDir, signCommonName, key, cert, signTlsChain); err != nil {
 		return fmt.Errorf("failed to write certificate: %w", err)
 	}
 

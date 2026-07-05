@@ -14,7 +14,6 @@ limitations under the License.
 package ca
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -26,7 +25,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"sort"
 	"strings"
 	"time"
 )
@@ -40,12 +38,10 @@ const (
 	MaxTLSDays                = 825
 )
 
+// TLSCA embeds BaseCA for key/cert storage and IO, and adds the root CA that
+// signs this second-level (intermediate) CA.
 type TLSCA struct {
-	Key     any // *rsa.PrivateKey or *ecdsa.PrivateKey
-	Cert    *x509.Certificate
-	KeyBits int    // 1024 * 2^x
-	Curve   string // P224, P256, P384, P521
-
+	BaseCA
 	RootCert *x509.Certificate
 	RootKey  any // *rsa.PrivateKey or *ecdsa.PrivateKey
 }
@@ -53,8 +49,10 @@ type TLSCA struct {
 // NewTLSCA create new tls CA
 func NewTLSCA(keyType string, keyBits int, curve string, rootCert *x509.Certificate, rootKey any) (*TLSCA, error) {
 	tlsCA := &TLSCA{
-		KeyBits: keyBits,
-		Curve:   curve,
+		BaseCA: BaseCA{
+			KeyBits: keyBits,
+			Curve:   curve,
+		},
 	}
 	if rootCert != nil {
 		tlsCA.RootCert = rootCert
@@ -63,150 +61,57 @@ func NewTLSCA(keyType string, keyBits int, curve string, rootCert *x509.Certific
 		tlsCA.RootKey = rootKey
 	}
 
-	if err := tlsCA.CreateKey(keyType); err != nil {
-		return nil, err
+	if err := tlsCA.GenerateKey(keyType); err != nil {
+		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 
 	if err := tlsCA.CreateCert(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create certificate: %w", err)
 	}
 
 	return tlsCA, nil
 }
 
-// LoadTLSCA create new tls CA
-func LoadTLSCA(keyPath, certPath, password string) (*TLSCA, error) {
-	keyBytes, kErr := os.ReadFile(keyPath)
-	certBytes, cErr := os.ReadFile(certPath)
-	if kErr != nil {
-		return nil, kErr
-	} else if cErr != nil {
-		return nil, cErr
+// LoadTLSCA load TLS CA from key/cert files. Only unencrypted PEM keys are
+// supported; decrypt encrypted keys with openssl first.
+func LoadTLSCA(keyPath, certPath string) (*TLSCA, error) {
+	tlsCA := &TLSCA{}
+
+	if err := tlsCA.LoadKey(keyPath); err != nil {
+		return nil, fmt.Errorf("failed to load key: %w", err)
 	}
 
-	// parse key
-	keyBlock, _ := pem.Decode(keyBytes)
-	if keyBlock == nil {
-		return nil, fmt.Errorf("decode key is nil")
+	if err := tlsCA.LoadCert(certPath); err != nil {
+		return nil, fmt.Errorf("failed to load certificate: %w", err)
 	}
 
-	// Check if PEM type is supported
-	index := sort.SearchStrings(supportPemType, keyBlock.Type)
-	if index >= len(supportPemType) || supportPemType[index] != keyBlock.Type {
-		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
-	}
-
-	/* Fix x-ca/ca root/tls key Problem
-	 * https://github.com/x-ca/ca/blob/f82f6cc529662d5a751b79d87698a13c65f342ec/etc/root-ca.conf#L15
-	 * https://security.stackexchange.com/questions/93417/what-encryption-is-applied-on-a-key-generated-by-openssl-req
-	 * https://rfc-editor.org/rfc/rfc1423.html
-	 * openssl asn1parse -in root-ca.key -i | cut -c-90
-	 *
-	 * Note: The deprecated x509.IsEncryptedPEMBlock and x509.DecryptPEMBlock functions
-	 * have been replaced with direct PEM header checking
-	 */
-	var key any
-	var err error
-
-	// Check if the PEM block is encrypted by checking for headers
-	isEncrypted := len(keyBlock.Headers) > 0 && keyBlock.Headers["Proc-Type"] == "4,ENCRYPTED"
-	if isEncrypted {
-		// Since x509.DecryptPEMBlock is deprecated, we recommend users decrypt their keys first
-		return nil, fmt.Errorf("encrypted PEM blocks are not supported - please decrypt your key first using: openssl rsa -in encrypted.key -out decrypted.key")
-	}
-
-	// Parse the unencrypted key
-	switch keyBlock.Type {
-	case "RSA PRIVATE KEY":
-		key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
-	case "EC PRIVATE KEY":
-		key, err = x509.ParseECPrivateKey(keyBlock.Bytes)
-	default:
-		return nil, fmt.Errorf("unsupport PEM type %s", keyBlock.Type)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("load private key %s, error %s", keyPath, err)
-	}
-
-	// parse cert
-	certBlock, _ := pem.Decode(certBytes)
-	if certBlock == nil {
-		return nil, fmt.Errorf("decode cert is nil")
-	} else if certBlock.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("unsupport PEM type %s", certBlock.Type)
-	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse CA certificate %s, error %s", certPath, err)
-	}
-
-	// compare key and cert match?
-	var pubKey any
-	switch k := key.(type) {
-	case *rsa.PrivateKey:
-		pubKey = k.Public()
-	case *ecdsa.PrivateKey:
-		pubKey = k.Public()
-	}
-	keyPKBytes, keyPKErr := x509.MarshalPKIXPublicKey(pubKey)
-	if keyPKErr != nil {
-		return nil, keyPKErr
-	}
-	certPKBytes, certPKErr := x509.MarshalPKIXPublicKey(cert.PublicKey)
-	if certPKErr != nil {
-		return nil, certPKErr
-	}
-	if !bytes.Equal(keyPKBytes, certPKBytes) {
-		return nil, fmt.Errorf("public key in CA certificate %s don't match private key in %s", certPath, keyPath)
-	}
-
-	tlsCA := &TLSCA{
-		Key:  key,
-		Cert: cert,
+	if err := ValidateKeyCertMatch(tlsCA.Key, tlsCA.Cert); err != nil {
+		return nil, fmt.Errorf("key and certificate don't match: %w", err)
 	}
 
 	return tlsCA, nil
 }
 
-// CreateKey create tls key
-func (c *TLSCA) CreateKey(keyType string) error {
-	switch strings.ToLower(keyType) {
-	case "ec", "ecdsa":
-		var curve elliptic.Curve
-		switch c.Curve {
-		case "P224":
-			curve = elliptic.P224()
-		case "P256":
-			curve = elliptic.P256()
-		case "P384":
-			curve = elliptic.P384()
-		case "P521":
-			curve = elliptic.P521()
-		default:
-			return fmt.Errorf("unsupport curve %s", c.Curve)
-		}
-		tlsKey, err := ecdsa.GenerateKey(curve, rand.Reader)
-		if err != nil {
-			return err
-		}
-		c.Key = tlsKey
-	case "rsa":
-		tlsKey, err := rsa.GenerateKey(rand.Reader, c.KeyBits)
-		if err != nil {
-			return err
-		}
-		c.Key = tlsKey
-	default:
-		return fmt.Errorf("unsupport key type %s", keyType)
-	}
-	return nil
-}
-
-// CreateCert create tls cert
+// CreateCert create tls cert signed by the root CA
 func (c *TLSCA) CreateCert() error {
+	pubKey, err := c.GetPublicKey()
+	if err != nil {
+		return fmt.Errorf("failed to get public key: %w", err)
+	}
+
+	keyID, err := calculateKeyID(pubKey)
+	if err != nil {
+		return fmt.Errorf("failed to calculate key ID: %w", err)
+	}
+
+	serial, err := randSerial(2) // default tls serial number is 2
+	if err != nil {
+		return fmt.Errorf("failed to generate serial: %w", err)
+	}
+
 	tlsCSR := &x509.Certificate{
 		Version:      3,
-		SerialNumber: randSerial(2), // default tls serial number is 2
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			Country:            []string{tlsCertCountry},
 			Organization:       []string{tlsCertOrganization},
@@ -214,9 +119,9 @@ func (c *TLSCA) CreateCert() error {
 			CommonName:         tlsCertCN,
 		},
 
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().AddDate(tlsCertYears, 0, 0),
-
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(tlsCertYears, 0, 0),
+		SubjectKeyId:          keyID,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 		MaxPathLen:            0,
@@ -224,125 +129,69 @@ func (c *TLSCA) CreateCert() error {
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 	}
 
-	var pubKey any
-	switch k := c.Key.(type) {
-	case *rsa.PrivateKey:
-		pubKey = k.Public()
-	case *ecdsa.PrivateKey:
-		pubKey = k.Public()
-	}
-
 	der, err := x509.CreateCertificate(rand.Reader, tlsCSR, c.RootCert, pubKey, c.RootKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create certificate: %w", err)
 	}
 
 	certificate, err := x509.ParseCertificate(der)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse certificate: %w", err)
 	}
 	c.Cert = certificate
 	return nil
 }
 
-// Write root key/cert to file
+// Write writes the tls CA key, cert, and chain (root + tls) to files
 func (c *TLSCA) Write(keyPath, certPath, chainPath string) error {
-	var err error
-	// mkdir
-	err = os.MkdirAll(path.Dir(keyPath), 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
+	if err := c.WriteKey(keyPath); err != nil {
+		return fmt.Errorf("failed to write key: %w", err)
 	}
 
-	err = os.MkdirAll(path.Dir(certPath), 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	// write key
-	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer keyFile.Close()
-
-	var keyType string
-	var keyBytes []byte
-	switch k := c.Key.(type) {
-	case *rsa.PrivateKey:
-		keyType = "RSA PRIVATE KEY"
-		keyBytes = x509.MarshalPKCS1PrivateKey(k)
-	case *ecdsa.PrivateKey:
-		keyType = "EC PRIVATE KEY"
-		keyBytes, err = x509.MarshalECPrivateKey(k)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = pem.Encode(keyFile, &pem.Block{
-		Type:  keyType,
-		Bytes: keyBytes,
-	})
-	if err != nil {
-		return err
-	}
-
-	// write cert
-	certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer certFile.Close()
-
-	err = pem.Encode(certFile, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: c.Cert.Raw,
-	})
-	if err != nil {
-		return err
+	if err := c.WriteCert(certPath); err != nil {
+		return fmt.Errorf("failed to write certificate: %w", err)
 	}
 
 	// write chain
+	if err := os.MkdirAll(path.Dir(chainPath), 0700); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to create chain directory: %w", err)
+	}
+
 	chainFile, err := os.OpenFile(chainPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open chain file: %w", err)
 	}
 	defer chainFile.Close()
 
-	// root cert
-	err = pem.Encode(chainFile, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: c.RootCert.Raw,
-	})
-	if err != nil {
-		return err
-	}
-
-	// tsl cert
-	err = pem.Encode(chainFile, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: c.Cert.Raw,
-	})
-	if err != nil {
-		return err
+	// root cert then tls cert
+	for _, cert := range []*x509.Certificate{c.RootCert, c.Cert} {
+		if err := pem.Encode(chainFile, &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Raw,
+		}); err != nil {
+			return fmt.Errorf("failed to encode chain: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days int, keyType string, keyBits int, curve string) (any, *x509.Certificate, error) {
-	if keyBits%1024 != 0 {
-		keyBits = 1024 * 4
-	}
-	if days/365 > tlsCertYears || days > MaxTLSDays {
+	if days > MaxTLSDays {
 		days = MaxTLSDays
+	}
+
+	keyTypeLower := strings.ToLower(keyType)
+	// RSA key sizes are aligned to a multiple of 1024 bits; EC ignores keyBits.
+	if keyTypeLower == "rsa" && keyBits%1024 != 0 {
+		keyBits = 1024 * 4
 	}
 
 	// generate key
 	var key any
 	var err error
-	switch strings.ToLower(keyType) {
+	var keyUsage x509.KeyUsage
+	switch keyTypeLower {
 	case "ec", "ecdsa":
 		var ecCurve elliptic.Curve
 		switch curve {
@@ -355,25 +204,33 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days int
 		case "P521":
 			ecCurve = elliptic.P521()
 		default:
-			return nil, nil, fmt.Errorf("unsupport curve %s", curve)
+			return nil, nil, fmt.Errorf("unsupported curve %s", curve)
 		}
 		key, err = ecdsa.GenerateKey(ecCurve, rand.Reader)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to generate EC key: %w", err)
 		}
+		// EC keys do not perform key encipherment.
+		keyUsage = x509.KeyUsageDigitalSignature
 	case "rsa":
 		key, err = rsa.GenerateKey(rand.Reader, keyBits)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to generate RSA key: %w", err)
 		}
+		keyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
 	default:
-		return nil, nil, fmt.Errorf("unsupport key type %s", keyType)
+		return nil, nil, fmt.Errorf("unsupported key type %s", keyType)
+	}
+
+	serial, err := randSerial(0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate serial: %w", err)
 	}
 
 	// create csr
 	csr := &x509.Certificate{
 		Version:      3,
-		SerialNumber: randSerial(0),
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName: commonName,
 		},
@@ -383,7 +240,7 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days int
 
 		BasicConstraintsValid: true,
 		IsCA:                  false,
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		KeyUsage:              keyUsage,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 	if len(domains) > 0 {
@@ -404,96 +261,87 @@ func (c *TLSCA) Sign(commonName string, domains []string, ips []net.IP, days int
 	// create cert
 	der, err := x509.CreateCertificate(rand.Reader, csr, c.Cert, pubKey, c.Key)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create certificate: %w", err)
 	}
 
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
 	return key, cert, nil
 }
 
-func (c *TLSCA) WriteCert(commonName string, key any, cert *x509.Certificate, tlsChainPath string) error {
-	// mkdir
-	var dir = strings.Replace(commonName, "*.", "", -1)
-	err := os.MkdirAll(fmt.Sprintf("x-ca/certs/%s", dir), 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
+// WriteSignedCert writes a signed leaf cert (key + crt + bundle) under outputDir/certs/<dir>.
+// The bundle is the leaf followed by the TLS CA chain read from tlsChainPath.
+// commonName flows into filesystem paths, so it is validated to reject path
+// separators and traversal sequences.
+func (c *TLSCA) WriteSignedCert(outputDir, commonName string, key any, cert *x509.Certificate, tlsChainPath string) error {
+	if err := validateSafeName(commonName); err != nil {
+		return fmt.Errorf("invalid common name: %w", err)
+	}
+	// strip a leading wildcard label so "*.example.com" lands under example.com/
+	dir := strings.TrimPrefix(commonName, "*.")
+	certDir := fmt.Sprintf("%s/certs/%s", strings.TrimRight(outputDir, "/"), dir)
+	if err := os.MkdirAll(certDir, 0700); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to create cert directory: %w", err)
 	}
 
 	// write key
-	keyPath := fmt.Sprintf("x-ca/certs/%s/%s.key", dir, commonName)
+	keyPath := fmt.Sprintf("%s/%s.key", certDir, commonName)
 	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open key file: %w", err)
 	}
 	defer keyFile.Close()
 
-	var keyType string
-	var keyBytes []byte
-	switch k := key.(type) {
-	case *rsa.PrivateKey:
-		keyType = "RSA PRIVATE KEY"
-		keyBytes = x509.MarshalPKCS1PrivateKey(k)
-	case *ecdsa.PrivateKey:
-		keyType = "EC PRIVATE KEY"
-		keyBytes, err = x509.MarshalECPrivateKey(k)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = pem.Encode(keyFile, &pem.Block{
-		Type:  keyType,
-		Bytes: keyBytes,
-	})
+	keyBlock, err := marshalPrivateKeyPEM(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal key: %w", err)
+	}
+	if err := pem.Encode(keyFile, keyBlock); err != nil {
+		return fmt.Errorf("failed to encode key: %w", err)
 	}
 
 	// write cert
-	certPath := fmt.Sprintf("x-ca/certs/%s/%s.crt", dir, commonName)
+	certPath := fmt.Sprintf("%s/%s.crt", certDir, commonName)
 	certFile, err := os.OpenFile(certPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open cert file: %w", err)
 	}
 	defer certFile.Close()
 
-	err = pem.Encode(certFile, &pem.Block{
+	if err := pem.Encode(certFile, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: cert.Raw,
-	})
-	if err != nil {
-		return err
+	}); err != nil {
+		return fmt.Errorf("failed to encode cert: %w", err)
 	}
 
-	// write cert chain
-	certChainPath := fmt.Sprintf("x-ca/certs/%s/%s.bundle.crt", dir, commonName)
+	// write cert chain: leaf + tls chain (root + tls)
+	certChainPath := fmt.Sprintf("%s/%s.bundle.crt", certDir, commonName)
 	certChainFile, err := os.OpenFile(certChainPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open chain file: %w", err)
 	}
 	defer certChainFile.Close()
 
-	certBytes, err := os.ReadFile(certPath)
-	if err == nil {
-		_, err := certChainFile.Write(certBytes)
-		if err != nil {
-			return err
-		}
-	}
-	chainBytes, err := os.ReadFile(tlsChainPath)
-	if err == nil {
-		_, err := certChainFile.Write(chainBytes)
-		if err != nil {
-			return err
-		}
+	if err := pem.Encode(certChainFile, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}); err != nil {
+		return fmt.Errorf("failed to encode leaf cert to chain: %w", err)
 	}
 
-	// print
-	fmt.Println("write cert to", fmt.Sprintf("./x-ca/certs/%s/{%s.key,%s.crt,%s.bundle.crt}", commonName, commonName, commonName, commonName))
+	chainBytes, err := os.ReadFile(tlsChainPath)
+	if err != nil {
+		return fmt.Errorf("failed to read TLS chain %s: %w", tlsChainPath, err)
+	}
+	if _, err := certChainFile.Write(chainBytes); err != nil {
+		return fmt.Errorf("failed to write TLS chain: %w", err)
+	}
+
+	fmt.Printf("write cert to %s/{%s.key,%s.crt,%s.bundle.crt}\n", certDir, commonName, commonName, commonName)
 
 	return nil
 }

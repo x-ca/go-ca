@@ -26,13 +26,6 @@ import (
 	"strings"
 )
 
-type CA interface {
-	GenerateKey() error
-	CreateCert() error
-	Write(keyPath, certPath, chainPath string) error
-	//Load(keyPath, certPath string) (any, error)
-}
-
 // BaseCA represents common functionality for all CA types
 type BaseCA struct {
 	Key     any // *rsa.PrivateKey or *ecdsa.PrivateKey
@@ -101,27 +94,28 @@ func (b *BaseCA) WriteKey(keyPath string) error {
 	}
 	defer keyFile.Close()
 
-	var keyType string
-	var keyBytes []byte
-	switch k := b.Key.(type) {
-	case *rsa.PrivateKey:
-		keyType = "RSA PRIVATE KEY"
-		keyBytes = x509.MarshalPKCS1PrivateKey(k)
-	case *ecdsa.PrivateKey:
-		keyType = "EC PRIVATE KEY"
-		var err error
-		keyBytes, err = x509.MarshalECPrivateKey(k)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unsupported key type")
+	block, err := marshalPrivateKeyPEM(b.Key)
+	if err != nil {
+		return err
 	}
+	return pem.Encode(keyFile, block)
+}
 
-	return pem.Encode(keyFile, &pem.Block{
-		Type:  keyType,
-		Bytes: keyBytes,
-	})
+// marshalPrivateKeyPEM encodes a private key as a PEM block. Supports RSA
+// (PKCS#1) and ECDSA (SEC1) keys; other types return an error.
+func marshalPrivateKeyPEM(key any) (*pem.Block, error) {
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		return &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}, nil
+	case *ecdsa.PrivateKey:
+		b, err := x509.MarshalECPrivateKey(k)
+		if err != nil {
+			return nil, err
+		}
+		return &pem.Block{Type: "EC PRIVATE KEY", Bytes: b}, nil
+	default:
+		return nil, fmt.Errorf("unsupported key type %T", key)
+	}
 }
 
 // WriteCert writes the certificate to a PEM file
@@ -165,7 +159,8 @@ func (b *BaseCA) LoadKey(keyPath string) error {
 	switch keyBlock.Type {
 	case "RSA PRIVATE KEY":
 		b.Key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
-	case "EC PRIVATE KEY":
+	case "EC PRIVATE KEY", "ECDSA PRIVATE KEY":
+		// Both PEM headers carry SEC1 EC private key bytes.
 		b.Key, err = x509.ParseECPrivateKey(keyBlock.Bytes)
 	default:
 		return fmt.Errorf("unsupported PEM type %s", keyBlock.Type)

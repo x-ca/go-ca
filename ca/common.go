@@ -23,15 +23,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/pem"
 	"fmt"
 	"math"
 	"math/big"
 	"net"
 	"os"
-	"path"
-	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // Common CA constants
@@ -49,36 +47,10 @@ const (
 	XCARootPath = "XCA_ROOT_PATH"
 )
 
-// CreateCertificateChain writes a certificate chain to file
-func CreateCertificateChain(chainPath string, certs ...*x509.Certificate) error {
-	if len(certs) == 0 {
-		return fmt.Errorf("no certificates provided")
-	}
-
-	// Create directory if it doesn't exist
-	err := os.MkdirAll(path.Dir(chainPath), 0700)
-	if err != nil && !os.IsExist(err) {
-		return err
-	}
-
-	chainFile, err := os.OpenFile(chainPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer chainFile.Close()
-
-	for _, cert := range certs {
-		err = pem.Encode(chainFile, &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
+// domainRegexp matches a hostname or domain with an optional leading "*."
+// wildcard. Each label must be non-empty, alphanumeric, and may contain
+// interior hyphens but must not start or end with one.
+var domainRegexp = regexp.MustCompile(`^(\*\.)?([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])(\.([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9]))*$`)
 
 // ValidateKeyCertMatch validates that a private key matches a certificate
 func ValidateKeyCertMatch(privateKey any, cert *x509.Certificate) error {
@@ -111,7 +83,7 @@ func ValidateKeyCertMatch(privateKey any, cert *x509.Certificate) error {
 
 // CheckFileExists checks if a file exists
 func CheckFileExists(filePath string) (bool, error) {
-	_, err := os.ReadFile(filePath)
+	_, err := os.Stat(filePath)
 	if err == nil {
 		return true, nil
 	}
@@ -121,26 +93,39 @@ func CheckFileExists(filePath string) (bool, error) {
 	return false, err
 }
 
-// EnsureDirectory creates a directory if it doesn't exist
-func EnsureDirectory(dirPath string) error {
-	return os.MkdirAll(dirPath, 0700)
+// validateSafeName rejects names that are unsafe to embed in filesystem paths.
+// It blocks empty input, path separators (/ and \), traversal sequences (..),
+// and NUL bytes — the components a crafted commonName could use to escape its
+// target directory.
+func validateSafeName(name string) error {
+	if name == "" {
+		return fmt.Errorf("empty name")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("name %q must not contain path separators", name)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("name %q must not contain traversal sequences", name)
+	}
+	if strings.ContainsRune(name, 0) {
+		return fmt.Errorf("name %q must not contain NUL bytes", name)
+	}
+	return nil
 }
 
-// CreateFile creates a file with exclusive creation mode
-func CreateFile(filePath string) (*os.File, error) {
-	return os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-}
-
-func randSerial(x int64) *big.Int {
+// randSerial returns a fixed positive serial when x > 0, otherwise a
+// cryptographically random serial in [0, math.MaxInt64). RFC 5280 requires
+// serial numbers to be positive and unique.
+func randSerial(x int64) (*big.Int, error) {
 	if x > 0 {
-		return big.NewInt(x)
+		return big.NewInt(x), nil
 	}
 
 	b, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
-		return big.NewInt(1)
+		return nil, fmt.Errorf("generate serial number: %w", err)
 	}
-	return b
+	return b, nil
 }
 
 func calculateKeyID(pubKey crypto.PublicKey) ([]byte, error) {
@@ -161,26 +146,34 @@ func calculateKeyID(pubKey crypto.PublicKey) ([]byte, error) {
 	return skid[:], nil
 }
 
+// ParseDomains parses and validates a list of domain names. Empty entries are
+// skipped. Any invalid entry returns an error naming the offender.
 func ParseDomains(domainStr []string) ([]string, error) {
 	var domainSlice []string
-	re := regexp.MustCompile("^[A-Za-z0-9-.*]+$")
 	for _, s := range domainStr {
-		if re.MatchString(s) {
-			domainSlice = append(domainSlice, s)
+		if s == "" {
+			continue
 		}
+		if !domainRegexp.MatchString(s) {
+			return nil, fmt.Errorf("invalid domain %q", s)
+		}
+		domainSlice = append(domainSlice, s)
 	}
 
 	return domainSlice, nil
 }
 
-func ParseIPs(ipStr []string) (ipSlice []net.IP, err error) {
+// ParseIPs parses and validates a list of IP addresses. Empty entries are
+// skipped. Any invalid entry returns an error naming the offender.
+func ParseIPs(ipStr []string) ([]net.IP, error) {
+	var ipSlice []net.IP
 	for _, s := range ipStr {
-		if len(s) == 0 {
+		if s == "" {
 			continue
 		}
 		p := net.ParseIP(s)
 		if p == nil {
-			continue
+			return nil, fmt.Errorf("invalid IP %q", s)
 		}
 		ipSlice = append(ipSlice, p)
 	}
@@ -193,12 +186,4 @@ func GetEnvDefault(key, defVal string) string {
 		return defVal
 	}
 	return val
-}
-
-func ExecPath() (string, error) {
-	ex, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Dir(ex), nil
 }
